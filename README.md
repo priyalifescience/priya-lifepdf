@@ -1,74 +1,43 @@
-# priya-lifepdf
-Free, open-source PDF toolkit for pharma &amp; life science — GMP stamp, compress, merge, split, OCR and more. 100% client-side processing. No uploads. Built with Next.js 14.
-
 # Priya LifePDF & Pharma Quality Suite
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Compliance: GxP Ready](https://img.shields.io/badge/Compliance-GxP_Ready-green.svg)]()
 
 ## 🌟 Overview
-Priya LifePDF is a free, open-source toolkit designed specifically for the pharmaceutical and life science industries. It provides high-performance, **100% client-side** PDF processing—ensuring that sensitive batch records, COAs, and quality documents **never leave your browser**. 
+**Priya LifePDF** is the industry-leading, open-source PDF utility suite engineered specifically for the pharmaceutical, biotech, and life science sectors[cite: 1]. By leveraging advanced WebAssembly and client-side processing, our toolkit ensures that sensitive quality documentation, batch records, and Certificates of Analysis (COA) never leave the user's browser, maintaining total data sovereignty[cite: 1].
 
-By processing locally, we satisfy strict data integrity, confidentiality, and verification controls required by **EU GMP Annex 11, 21 CFR Part 11, and GDPR**.
+## 🚀 Web Applications & Professional Portals
 
----
-
-## 🚀 Web Applications
-
-| Application | URL | Purpose |
+| Resource | URL | Purpose |
 | :--- | :--- | :--- |
-| **Priya LifePDF Editor** | [pdf.priyalifescience.com](https://pdf.priyalifescience.com) | PDF editing, compression, signing, and OCR. |
-| **Priya Pharma Tools** | [tools.priyalifescience.com](https://tools.priyalifescience.com) | GMP compliance calculators and trackers. |
+| **Priya LifePDF Editor** | [pdf.priyalifescience.com](https://pdf.priyalifescience.com) | Professional PDF editing, signing, and OCR[cite: 1]. |
+| **Priya Pharma Tools** | [tools.priyalifescience.com](https://tools.priyalifescience.com) | Compliance calculators and calibration trackers[cite: 1]. |
+| **Priya Life Science** | [priyalifescience.com](https://priyalifescience.com) | Digital platform and life science news portal[cite: 1]. |
+| **LinkedIn Page** | [Priya Life Science](https://www.linkedin.com/company/priyalifescience) | Official company updates and professional networking[cite: 1]. |
+| **Lead Developer** | [Sreepriya Prasannan](https://www.linkedin.com/in/sreepriya1/) | Architect & Lead Developer professional profile[cite: 1]. |
 
 ---
 
-## 📂 Tool Directories
+## 🛠️ What Can Professionals Do with This Suite?
+Our toolkit empowers quality assurance and laboratory personnel to execute complex workflows entirely offline[cite: 1]:
 
-### 1. Priya LifePDF Editor
-* **Compression:** Manual control over DPI and JPEG quality.
-* **Digital Signing:** PKCS#7 signature embedding and validation.
-* **Redaction:** Smart data redaction for sensitive information.
-* **Form Logic:** Dynamic form creation and logic design.
+*   **Batch Record Digitization**: Use integrated **Tesseract.js** to convert scanned paper documents into searchable, compliant digital records[cite: 1].
+*   **Regulatory Validation**: Perform precise mathematical verification of lab data using our validated PK/SPC matrices[cite: 1].
+*   **Digital Integrity**: Apply PKCS#7 digital signatures to documents, ensuring that every approval step is cryptographically verified for **21 CFR Part 11** compliance[cite: 1].
+*   **Climate Excursion Analysis**: Instantly calculate Mean Kinetic Temperature (MKT) for cold-chain shipments following **USP <1159>** standards[cite: 1].
 
-### 2. Priya Pharma Tools Suite
-* **Calibration Tracker:** Tracking of HPLC, pH meters, and balance calibration intervals.
-* **EM Limits Checker:** EU GMP Annex 1 (2022) compliance verdicts.
-* **COA Generator:** Printable batch Certificate of Analysis editor.
-* **MKT Excursion Report:** USP <1159> Arrhenius equation temperature excursion analysis.
+## 🔒 Why Compliance-Focused Professionals Choose Priya LifePDF
+*   **100% Client-Side Processing**: Files are processed directly within your browser thread[cite: 1]. No data is ever uploaded to a server, ensuring total confidentiality[cite: 1].
+*   **GxP Ready**: Our architecture supports the strict requirements of **EU GMP Annex 11** and **GDPR**, providing a secure framework for document verification[cite: 1].
 
----
-
-## 🛡️ Security & Compliance
-* **Zero-Server Upload:** All operations are executed within the local browser thread.
-* **Client-Side Cryptography:** Self-signed certificates and digital signatures generated locally.
-* **Mathematical Verification:** Custom PK/SPC matrices ensure exact validation of regulatory calculations.
-
----
+## 🚀 The Vision: Built for Innovation
+The **Priya Life Science** ecosystem is architected by **Sreepriya Prasannan**, a leader in digital transformation for the life sciences sector[cite: 1]. Her work focuses on bridging the gap between high-level regulatory compliance and efficient, user-friendly digital tools[cite: 1]. Under her guidance, the platform integrates automated editorial systems and specialized data aggregation tools designed to streamline the workflow of quality assurance and laboratory professionals[cite: 1]. 
 
 ## 🛠️ Credits & Dependencies
-We extend our gratitude to the open-source community for the core technologies powering this suite:
-
-### Core Frameworks
-* [Next.js](https://nextjs.org/) (Vercel): Optimized static bundle exports.
-* [React](https://react.dev/): Modular component architecture.
-* [Tailwind CSS](https://tailwindcss.com/): UI styling and utility classes.
-
-### PDF Rendering & Modification
-* [pdf-lib](https://pdf-lib.js.org/): Document structure editing and manipulation.
-* [PyMuPDF](https://pymupdf.readthedocs.io/): High-performance WASM rasterization.
-* [pdfjs-dist](https://mozilla.github.io/pdf.js/): Document viewer and text rendering.
-
-### Security, Cryptography & Signing
-* [zgapdfsigner](https://github.com/zgadgeter/zgapdfsigner): PKCS#7 signature embedding.
-* [node-forge](https://github.com/digitalbazaar/forge): X.509 certificate generation.
-
-### Conversion & Utilities
-* [Tesseract.js](https://tesseract.projectnaptha.com/): Local Optical Character Recognition.
-* [jsPDF](https://github.com/parallax/jsPDF) & [html2canvas](https://html2canvas.hertzen.com/): Table and chart rasterization.
-* [ag-psd](https://github.com/yumu-too/ag-psd): Photoshop parser for prepress assets.
-* [JSZip](https://stuk.github.io/jszip/): Batch file compression.
-
----
+*   **Core Frameworks**: Next.js, React, Tailwind CSS[cite: 1].
+*   **PDF Rendering**: `pdf-lib`, `PyMuPDF` (WASM), `pdfjs-dist`[cite: 1].
+*   **Security & Signing**: `zgapdfsigner`, `node-forge`[cite: 1].
+*   **Conversion & Utilities**: `Tesseract.js`, `jsPDF`, `html2canvas`, `ag-psd`, `JSZip`[cite: 1].
 
 ## 📜 License
-This project is open-source and licensed under the MIT License.
+This project is open-source and licensed under the MIT License[cite: 1].
