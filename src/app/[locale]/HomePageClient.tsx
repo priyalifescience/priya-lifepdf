@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight, Zap, Wrench, Sparkles, Edit, FileImage,
   FolderOpen, Settings, ShieldCheck, Star, FlaskConical,
-  FileCheck2, Lock, MapPin,
+  FileCheck2, Lock, MapPin, Layers,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -48,19 +48,196 @@ function StatItem({ value, suffix = '', label }: { value: number; suffix?: strin
   const { count, ref } = useCountUp(value);
   return (
     <div ref={ref} className="text-center px-4 py-8 hp-stat-item">
-      <div className="text-4xl lg:text-5xl font-black mb-1.5" style={{ color: '#86bc24', fontVariantNumeric: 'tabular-nums' }}>
+      <div className="text-4xl lg:text-5xl font-black mb-1.5" style={{ color: '#2e7d1a', fontVariantNumeric: 'tabular-nums' }}>
         {count}{suffix}
       </div>
-      <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#5a7a7e' }}>{label}</div>
+      <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#6b7280' }}>{label}</div>
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
 export default function HomePageClient({ locale, localizedToolContent }: HomePageClientProps) {
   const t = useTranslations();
   const allTools = getAllTools();
   const popularTools = getPopularTools();
+
+  // --- Canvas particle system hook ---
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let width = canvas.width = canvas.offsetWidth;
+    let height = canvas.height = canvas.offsetHeight;
+
+    const handleResize = () => {
+      if (!canvas) return;
+      width = canvas.width = canvas.offsetWidth;
+      height = canvas.height = canvas.offsetHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    const particles: Array<{
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      r: number;
+    }> = [];
+
+    const numParticles = 40;
+    for (let i = 0; i < numParticles; i++) {
+      particles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: Math.random() * 2 + 1,
+      });
+    }
+
+    let mouse = { x: -1000, y: -1000 };
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    };
+    const handleMouseLeave = () => {
+      mouse.x = -1000;
+      mouse.y = -1000;
+    };
+
+    const parent = canvas.parentElement;
+    if (parent) {
+      parent.addEventListener('mousemove', handleMouseMove);
+      parent.addEventListener('mouseleave', handleMouseLeave);
+    }
+
+    const draw = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw lines & particles
+      ctx.strokeStyle = 'rgba(46, 125, 26, 0.04)';
+      ctx.fillStyle = 'rgba(46, 125, 26, 0.12)';
+
+      for (let i = 0; i < numParticles; i++) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.x > width) p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        for (let j = i + 1; j < numParticles; j++) {
+          const p2 = particles[j];
+          const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+          if (dist < 120) {
+            ctx.lineWidth = (1 - dist / 120) * 0.8;
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        }
+
+        if (mouse.x > -500) {
+          const distToMouse = Math.hypot(p.x - mouse.x, p.y - mouse.y);
+          if (distToMouse < 180) {
+            ctx.lineWidth = (1 - distToMouse / 180) * 1.2;
+            ctx.strokeStyle = 'rgba(46, 125, 26, 0.09)';
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(mouse.x, mouse.y);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(46, 125, 26, 0.04)';
+          }
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (parent) {
+        parent.removeEventListener('mousemove', handleMouseMove);
+        parent.removeEventListener('mouseleave', handleMouseLeave);
+      }
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  // --- Slider and Tab State Management ---
+  const [activeTab, setActiveTab] = useState<'workflow' | 'compliance'>('workflow');
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [slideProgress, setSlideProgress] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Auto-scrolling slide deck and progress bar logic
+  useEffect(() => {
+    if (activeTab !== 'workflow' || isPaused) return;
+
+    const intervalTime = 4500; // 4.5 seconds per slide
+    const updateInterval = 45; // update progress bar every 45ms
+    const step = (updateInterval / intervalTime) * 100;
+
+    const timer = setInterval(() => {
+      setSlideProgress((prev) => {
+        if (prev >= 100) {
+          setActiveSlide((prevIndex) => (prevIndex + 1) % 4);
+          return 0;
+        }
+        return prev + step;
+      });
+    }, updateInterval);
+
+    return () => clearInterval(timer);
+  }, [activeTab, isPaused]);
+
+  const handleSlideSelect = (index: number) => {
+    setActiveSlide(index);
+    setSlideProgress(0);
+  };
+
+  const workflowSlides = [
+    {
+      title: '1. Select Local Tool',
+      desc: 'Browse and select from 90+ specialized GxP PDF tools. Form logic builders, signature helpers, deskewers, and deep sanitizers ready in one click.',
+      badge: 'Choose Utility',
+      stepText: 'STEP 1',
+      icon: Wrench,
+    },
+    {
+      title: '2. Drag & Drop File',
+      desc: 'Your file is loaded directly into the browser tab\'s local secure memory sandbox. Absolutely zero bytes are uploaded or transmitted to any server.',
+      badge: 'Local Load',
+      stepText: 'STEP 2',
+      icon: Lock,
+    },
+    {
+      title: '3. Process & Customize',
+      desc: 'Verify signature matrices, dynamic coordinates, or apply approved status marks. All calculations execute instantly at native machine speed.',
+      badge: 'GxP Stamping',
+      stepText: 'STEP 3',
+      icon: ShieldCheck,
+    },
+    {
+      title: '4. Download Export',
+      desc: 'Save your verified, fully compliant PDF instantly. Clean pieceInfo, rebuilt cross-reference tables, and fully optimized assets downloaded in milliseconds.',
+      badge: 'Lossless Save',
+      stepText: 'STEP 4',
+      icon: FileCheck2,
+    },
+  ];
 
   const categoryIcons: Record<ToolCategory, typeof Edit> = {
     'edit-annotate': Edit,
@@ -86,181 +263,162 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
   ];
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#0d1317', color: '#e8edf0' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: '#ffffff', color: '#1a2e0f' }}>
 
-      {/* ── All keyframes + utility classes ── */}
       <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes hpmarquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
-        @keyframes lifepdf-ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
-        @keyframes hp-fade-up   { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes hp-fade-right{ from{opacity:0;transform:translateX(24px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes hp-orb-pulse { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.1);opacity:1} }
-        @keyframes hp-orb-drift { 0%,100%{transform:translate(0,0)} 50%{transform:translate(18px,-14px)} }
-        @keyframes hp-float     { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
-        @keyframes hp-dot-blink { 0%,100%{opacity:1} 50%{opacity:.25} }
-        @keyframes hp-shimmer   { 0%{transform:translateX(-150%)} 100%{transform:translateX(250%)} }
-        @keyframes hp-bar-fill  { from{width:0} to{width:var(--bar-w)} }
+        @keyframes hpmarquee     { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+        @keyframes lp-ticker     { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+        @keyframes hp-fade-up    { from{opacity:0;transform:translateY(15px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes hp-fade-right { from{opacity:0;transform:translateX(15px)} to{opacity:1;transform:translateX(0)} }
 
-        .hp-badge  { animation: hp-fade-up  .5s ease both; }
-        .hp-h1     { animation: hp-fade-up  .6s ease .08s both; }
-        .hp-sub    { animation: hp-fade-up  .6s ease .16s both; }
-        .hp-chips  { animation: hp-fade-up  .6s ease .24s both; }
-        .hp-ctas   { animation: hp-fade-up  .6s ease .32s both; }
-        .hp-panel  { animation: hp-fade-right .75s ease .1s both; }
-        .hp-pfloat { animation: hp-float 5.5s ease-in-out infinite; }
-        .hp-orb1   { animation: hp-orb-pulse 6s ease-in-out infinite, hp-orb-drift 11s ease-in-out infinite; }
-        .hp-orb2   { animation: hp-orb-pulse 8s ease-in-out 2s infinite; }
-        .hp-orb3   { animation: hp-orb-pulse 7s ease-in-out 4s infinite; }
-        .hp-dot    { animation: hp-dot-blink 2.2s ease-in-out infinite; }
+        .hp-badge  { animation:hp-fade-up  .4s ease both; }
+        .hp-h1     { animation:hp-fade-up  .5s ease .05s both; }
+        .hp-sub    { animation:hp-fade-up  .5s ease .1s both; }
+        .hp-chips  { animation:hp-fade-up  .5s ease .15s both; }
+        .hp-ctas   { animation:hp-fade-up  .5s ease .2s both; }
+        .hp-panel  { animation:hp-fade-right .6s ease .1s both; }
 
         .hp-btn-solid {
-          display:inline-flex; align-items:center; gap:8px;
-          border-radius:12px; padding:12px 28px; font-size:15px; font-weight:700; cursor:pointer;
-          background:#86bc24; color:#0a0f0b;
-          box-shadow:0 4px 24px rgba(134,188,36,.32);
-          transition:transform .18s ease, box-shadow .18s ease;
-          border:none;
+          display:inline-flex;align-items:center;justify-content:center;gap:8px;
+          border-radius:6px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer;
+          background:#111827;color:#ffffff;border:none;
+          transition:background .15s ease,transform .12s ease;
         }
-        .hp-btn-solid:hover { transform:translateY(-2px); box-shadow:0 8px 36px rgba(134,188,36,.45); }
+        .hp-btn-solid:hover { background:#1f2937; }
+        .hp-btn-solid:active { transform:translateY(1px); }
 
         .hp-btn-outline {
-          display:inline-flex; align-items:center; gap:8px;
-          border-radius:12px; padding:12px 22px; font-size:14px; font-weight:600; cursor:pointer;
-          background:rgba(134,188,36,.06); color:#86bc24;
-          border:1px solid rgba(134,188,36,.28);
-          transition:transform .18s ease, background .18s ease;
+          display:inline-flex;align-items:center;justify-content:center;gap:8px;
+          border-radius:6px;padding:12px 28px;font-size:14px;font-weight:600;cursor:pointer;
+          background:#f3f4f6;color:#111827;border:1px solid #e5e7eb;
+          transition:background .15s ease,transform .12s ease;
         }
-        .hp-btn-outline:hover { transform:translateY(-2px); background:rgba(134,188,36,.12); }
+        .hp-btn-outline:hover { background:#e5e7eb; }
+        .hp-btn-outline:active { transform:translateY(1px); }
+
+        .hp-btn-green {
+          display:inline-flex;align-items:center;justify-content:center;gap:8px;
+          border-radius:6px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer;
+          background:#2e7d1a;color:#ffffff;border:none;
+          transition:background .15s ease,transform .12s ease;
+        }
+        .hp-btn-green:hover { background:#246314; }
+        .hp-btn-green:active { transform:translateY(1px); }
 
         .hp-card {
-          transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+          border: 1px solid #e5e7eb;
+          transition:border-color .15s ease,box-shadow .15s ease;
         }
         .hp-card:hover {
-          transform:translateY(-3px);
-          box-shadow:0 8px 32px rgba(134,188,36,.12);
-          border-color:rgba(134,188,36,.35) !important;
+          border-color:#2e7d1a !important;
+          box-shadow: 0 4px 12px rgba(46,125,26,0.06);
         }
-
-        .hp-cat-icon { transition:transform .2s ease; }
-        .hp-card:hover .hp-cat-icon { transform:scale(1.1); }
+        .hp-cat-icon { transition:background .15s ease,transform .15s ease; }
+        .hp-card:hover .hp-cat-icon { transform:scale(1.03);background:rgba(46,125,26,.08) !important; }
         .hp-cat-title { transition:color .15s ease; }
-        .hp-card:hover .hp-cat-title { color:#86bc24 !important; }
+        .hp-card:hover .hp-cat-title { color:#2e7d1a !important; }
 
-        .hp-shimmer-wrap { position:relative; overflow:hidden; }
-        .hp-shimmer-wrap::after {
-          content:'';
-          position:absolute; top:0; left:0; right:0; bottom:0;
-          background:linear-gradient(90deg,transparent,rgba(134,188,36,.04),transparent);
-          animation:hp-shimmer 4s ease-in-out infinite;
-          pointer-events:none;
-        }
-
-        .hp-stat-item { transition:background .2s ease; border-radius:12px; }
-        .hp-stat-item:hover { background:rgba(134,188,36,.04); }
-
-        .lifepdf-ticker-track { display:flex;align-items:center;white-space:nowrap;animation:lifepdf-ticker 55s linear infinite;will-change:transform; }
-        .lifepdf-ticker-track:hover { animation-play-state:paused; }
-        .lti { display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.07em;text-transform:uppercase;padding:0 20px;white-space:nowrap; }
-        .lti svg { color:#86bc24;flex-shrink:0; }
-        .lti .hl { color:#86bc24; }
-        .lti-dot { display:inline-block;width:3px;height:3px;border-radius:50%;background:rgba(134,188,36,.4);flex-shrink:0;margin:0 4px; }
-        .ltfade-l { position:absolute;top:0;bottom:0;left:0;width:80px;background:linear-gradient(to right,#080c09 30%,transparent);pointer-events:none;z-index:2; }
-        .ltfade-r { position:absolute;top:0;bottom:0;right:0;width:80px;background:linear-gradient(to left,#080c09 30%,transparent);pointer-events:none;z-index:2; }
-
-        .hp-stamp-row { transition:transform .15s ease, box-shadow .15s ease; }
-        .hp-stamp-row:hover { transform:translateX(4px); }
-
-        .hp-glow-border {
-          background: linear-gradient(135deg, rgba(134,188,36,.38), rgba(134,188,36,.05) 60%, rgba(134,188,36,.1));
-          padding:1px; border-radius:18px;
-        }
-        .hp-glow-inner { border-radius:17px; }
+        .hp-stat-item { transition:background .15s ease;border-radius:8px; }
+        .hp-stat-item:hover { background:#f9fafb; }
 
         .hp-section-label {
-          display:inline-flex; align-items:center; gap:6px;
-          padding:5px 14px; border-radius:99px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
-          background:rgba(134,188,36,.08); border:1px solid rgba(134,188,36,.18); color:#86bc24;
-          margin-bottom:16px;
+          display:inline-flex;align-items:center;gap:6px;
+          padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;
+          letter-spacing:.06em;text-transform:uppercase;
+          background:rgba(46,125,26,.08);border:1px solid rgba(46,125,26,.2);color:#2e7d1a;
+          margin-bottom:12px;
         }
+
+        .lp-ticker-track { display:flex;align-items:center;white-space:nowrap;animation:lp-ticker 55s linear infinite;will-change:transform; }
+        .lp-ticker-track:hover { animation-play-state:paused; }
+        .lti { display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
+               color:rgba(255,255,255,.9);letter-spacing:.07em;text-transform:uppercase;
+               padding:0 20px;white-space:nowrap; }
+        .lti svg { color:rgba(255,255,255,.75);flex-shrink:0; }
+        .lti .hl { color:#ffffff;font-weight:800; }
+        .lti-dot { display:inline-block;width:3px;height:3px;border-radius:50%;
+                   background:rgba(255,255,255,.4);flex-shrink:0;margin:0 4px; }
+        .ltfade-l { position:absolute;top:0;bottom:0;left:0;width:80px;
+                    background:linear-gradient(to right,#2e7d1a 30%,transparent);
+                    pointer-events:none;z-index:2; }
+        .ltfade-r { position:absolute;top:0;bottom:0;right:0;width:80px;
+                    background:linear-gradient(to left,#2e7d1a 30%,transparent);
+                    pointer-events:none;z-index:2; }
       `}} />
 
       <Header locale={locale} />
 
       {/* ── Top sector ticker (fixed) ── */}
       <div className="fixed top-[72px] left-0 right-0 z-40 overflow-hidden select-none"
-           style={{ background: '#111a14', borderBottom: '1px solid rgba(134,188,36,.18)' }}>
-        <div className="flex whitespace-nowrap animate-[hpmarquee_40s_linear_infinite] py-[9px] gap-10 text-[11px] font-bold tracking-widest uppercase" style={{ color: '#86bc24' }}>
+           style={{ background: '#66B539', borderBottom: '1px solid rgba(0,0,0,.08)' }}>
+        <div className="flex whitespace-nowrap animate-[hpmarquee_40s_linear_infinite] py-[8px] gap-10 text-[11px] font-bold tracking-widest uppercase" style={{ color: '#fff' }}>
           {[0,1].map(i => (
             <div key={i} className="flex gap-10 items-center" aria-hidden={i === 1 ? 'true' : undefined}>
-              <span>🧬 Pharma</span><span style={{color:'rgba(134,188,36,.3)'}}>◆</span>
-              <span>🔬 Biotech &amp; MedTech</span><span style={{color:'rgba(134,188,36,.3)'}}>◆</span>
-              <span>🏥 Health</span><span style={{color:'rgba(134,188,36,.3)'}}>◆</span>
-              <span>🇮🇪 Life Science Ireland</span><span style={{color:'rgba(134,188,36,.3)'}}>◆</span>
-              <span>📄 PDF Editor for Life Science</span><span style={{color:'rgba(134,188,36,.3)'}}>◆</span>
-              <span>🛡️ GDPR · No File Upload</span><span style={{color:'rgba(134,188,36,.3)'}}>◆</span>
-              <span>✅ EU GMP Annex 1 · HPRA</span><span style={{color:'rgba(134,188,36,.3)'}}>◆</span>
+              <span>🧬 Pharma</span><span style={{color:'rgba(255,255,255,.4)'}}>◆</span>
+              <span>🔬 Biotech &amp; MedTech</span><span style={{color:'rgba(255,255,255,.4)'}}>◆</span>
+              <span>🏥 Health</span><span style={{color:'rgba(255,255,255,.4)'}}>◆</span>
+              <span>🇮🇪 Life Science Ireland</span><span style={{color:'rgba(255,255,255,.4)'}}>◆</span>
+              <span>📄 PDF Editor for Life Science</span><span style={{color:'rgba(255,255,255,.4)'}}>◆</span>
+              <span>🛡️ GDPR · No File Upload</span><span style={{color:'rgba(255,255,255,.4)'}}>◆</span>
+              <span>✅ EU GMP Annex 1 · HPRA</span><span style={{color:'rgba(255,255,255,.4)'}}>◆</span>
             </div>
           ))}
         </div>
       </div>
 
-      <main id="main-content" className="flex-1" tabIndex={-1} style={{ paddingTop: '108px' }}>
+      <main id="main-content" className="flex-1" tabIndex={-1} style={{ paddingTop: '96px' }}>
 
-        {/* ════════════════════════════════════════════════
-            HERO
-        ════════════════════════════════════════════════ */}
+        {/* ════════════════ HERO ════════════════ */}
         <section
-          className="relative overflow-hidden pb-28 lg:pb-36 pt-14 lg:pt-20"
-          style={{ background: 'linear-gradient(160deg,#090e0b 0%,#0d1317 42%,#0e1910 100%)' }}
+          className="relative overflow-hidden"
+          style={{ borderBottom: '1px solid rgba(0,0,0,0.18)', paddingTop:'52px', paddingBottom:'72px' }}
           aria-labelledby="hero-title"
         >
-          {/* Dot grid */}
-          <div className="absolute inset-0 pointer-events-none" style={{
-            backgroundImage: 'radial-gradient(circle, rgba(134,188,36,.055) 1px, transparent 1px)',
-            backgroundSize: '30px 30px',
-          }} />
+          {/* Background video */}
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ zIndex: 0 }}
+            aria-hidden="true"
+          >
+            <source src="/images/hero_amine.mp4" type="video/mp4" />
+          </video>
 
-          {/* Animated orbs */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="hp-orb1 absolute top-[-100px] left-[10%] w-[580px] h-[580px] rounded-full"
-                 style={{ background: 'radial-gradient(circle,rgba(134,188,36,.13) 0%,transparent 65%)' }} />
-            <div className="hp-orb2 absolute top-[80px] right-[6%] w-[380px] h-[380px] rounded-full"
-                 style={{ background: 'radial-gradient(circle,rgba(102,181,57,.09) 0%,transparent 65%)' }} />
-            <div className="hp-orb3 absolute bottom-[-20px] left-1/2 -translate-x-1/2 w-[800px] h-[260px] rounded-full"
-                 style={{ background: 'radial-gradient(ellipse,rgba(134,188,36,.07) 0%,transparent 70%)' }} />
-          </div>
+          {/* Dark overlay for text legibility */}
+          <div
+            className="absolute inset-0"
+            style={{ background: 'linear-gradient(135deg, rgba(0,0,0,0.62) 0%, rgba(10,30,8,0.52) 100%)', zIndex: 1 }}
+          />
 
-          {/* Bottom fade */}
-          <div className="absolute bottom-0 left-0 right-0 h-36 pointer-events-none"
-               style={{ background: 'linear-gradient(to bottom,transparent,#0d1317)' }} />
-
-          <div className="container mx-auto px-4 relative z-10">
-            <div className="flex flex-col lg:flex-row lg:items-center gap-14 lg:gap-20">
+          <div className="container mx-auto relative" style={{ zIndex: 10, paddingLeft:'clamp(16px,4vw,48px)', paddingRight:'clamp(16px,4vw,48px)' }}>
+            <div className="flex flex-col lg:flex-row lg:items-center gap-12 lg:gap-16">
 
               {/* Left */}
-              <div className="flex-1 max-w-2xl">
-                <div className="hp-badge inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide"
-                     style={{ background:'rgba(134,188,36,.08)', border:'1px solid rgba(134,188,36,.22)', color:'#86bc24' }}>
-                  <span className="hp-dot h-1.5 w-1.5 rounded-full inline-block" style={{ background:'#86bc24' }} />
-                  Priya LifePDF · Ireland's Pharma PDF Toolkit
+              <div className="flex-1 min-w-0">
+                <div className="hp-badge inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide mb-5"
+                     style={{ background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.30)', color:'#ffffff', backdropFilter:'blur(6px)' }}>
+                  🧬 Priya LifePDF · Ireland's Pharma PDF Toolkit
                 </div>
 
                 <h1 id="hero-title"
-                    className="hp-h1 text-[2.6rem] md:text-5xl lg:text-[3.6rem] font-black tracking-tight leading-[1.06] mt-5 mb-5"
-                    style={{ color:'#f0f4e8' }}>
+                    className="hp-h1 font-black tracking-tight leading-[1.06] mb-5"
+                    style={{ color:'#ffffff', fontSize:'clamp(2rem,5vw,3.4rem)', textShadow:'0 2px 16px rgba(0,0,0,0.3)' }}>
                   Private PDF Toolkit{' '}
-                  <span style={{ color:'#86bc24' }}>for Pharma</span>
+                  <span style={{ color:'#7fe860' }}>for Pharma</span>
                   <br className="hidden md:block" />
                   {' '}&amp; Life Science
                 </h1>
 
-                <p className="hp-sub text-base lg:text-lg mb-8 leading-relaxed max-w-xl" style={{ color:'#7a9a9e' }}>
+                <p className="hp-sub text-base mb-7 leading-relaxed" style={{ color:'rgba(255,255,255,0.82)', maxWidth:'520px', fontSize:'1.05rem' }}>
                   Process batch records, SOPs, validation protocols and regulatory
-                  submissions without sending a single file to any server.{' '}
-                  <span style={{ color:'#a8c890' }}>90+ professional tools. 100% private.</span>
+                  submissions — without sending a single byte to any server.{' '}
+                  <strong style={{ color:'#7fe860', fontWeight:700 }}>90+ professional tools. 100% private.</strong>
                 </p>
 
-                <div className="hp-chips flex flex-wrap gap-2 mb-8">
+                <div className="hp-chips flex flex-wrap gap-2 mb-7">
                   {[
                     { icon: Lock,        label:'Files never leave your device' },
                     { icon: MapPin,      label:'Operated from Ireland' },
@@ -268,8 +426,8 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
                   ].map(({ icon: Icon, label }) => (
                     <div key={label}
                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                         style={{ background:'rgba(134,188,36,.08)', border:'1px solid rgba(134,188,36,.17)', color:'#a8d45c' }}>
-                      <Icon className="h-3.5 w-3.5" />
+                         style={{ background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.25)', color:'rgba(255,255,255,0.9)', backdropFilter:'blur(4px)' }}>
+                      <Icon className="h-3.5 w-3.5" style={{ color:'#7fe860' }} />
                       {label}
                     </div>
                   ))}
@@ -277,63 +435,169 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
 
                 <div className="hp-ctas flex flex-col sm:flex-row gap-3">
                   <Link href={`/${locale}/tools`}>
-                    <button className="hp-btn-solid">
+                    <button className="hp-btn-solid" style={{ padding:'13px 36px', fontSize:'15px', background:'#2e7d1a' }}>
                       {t('home.hero.cta')}
                       <ArrowRight className="h-5 w-5" />
                     </button>
                   </Link>
                   <Link href={`/${locale}/tools/gmp-stamp`}>
-                    <button className="hp-btn-outline">
-                      <FlaskConical className="h-4 w-4" />
+                    <button className="hp-btn-outline" style={{ padding:'13px 28px', fontSize:'15px', background:'rgba(255,255,255,0.10)', border:'1px solid rgba(255,255,255,0.30)', color:'#ffffff', backdropFilter:'blur(4px)' }}>
+                      <FlaskConical className="h-4 w-4" style={{ color:'#7fe860' }} />
                       GMP Stamp Tool
                     </button>
                   </Link>
                 </div>
+
+                {/* Social proof strip */}
+                <div className="mt-8 pt-7 flex flex-wrap gap-x-6 gap-y-2 items-center" style={{ borderTop:'1px solid rgba(255,255,255,0.15)' }}>
+                  <span className="text-xs font-semibold uppercase tracking-widest" style={{ color:'rgba(255,255,255,0.45)' }}>Trusted for</span>
+                  {['EU GMP Annex 1','GDPR Art.25','HPRA','FDA 21 CFR Pt.11','ICH Q10'].map(b => (
+                    <span key={b} className="text-xs font-bold" style={{ color:'rgba(255,255,255,0.65)' }}>{b}</span>
+                  ))}
+                </div>
               </div>
 
-              {/* Right: compliance panel */}
-              <div className="hp-panel lg:flex-shrink-0 lg:w-80 xl:w-[360px]">
-                <div className="hp-pfloat hp-glow-border">
-                  <div className="hp-glow-inner p-6 space-y-3"
-                       style={{ background:'#0e1910' }}>
+              {/* Right: Interactive Widget (Tabs: Workflow Guide & Compliance Status) */}
+              <div className="hp-panel lg:flex-shrink-0 lg:w-[400px] xl:w-[420px]" style={{ zIndex: 10 }}>
+                <div className="rounded-2xl border border-slate-200 bg-white"
+                     style={{ boxShadow:'0 4px 20px rgba(0,0,0,0.03)' }}>
+                  
+                  {/* Tab Selector Headers */}
+                  <div className="flex border-b border-slate-100 p-2 gap-1 bg-slate-50 rounded-t-2xl">
+                    <button
+                      onClick={() => setActiveTab('workflow')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        activeTab === 'workflow'
+                          ? 'bg-white text-[#2e7d1a] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                      Interactive Workflow
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('compliance')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        activeTab === 'compliance'
+                          ? 'bg-white text-[#2e7d1a] shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Compliance Overview
+                    </button>
+                  </div>
 
-                    <div className="flex items-center gap-2 pb-3 mb-1"
-                         style={{ borderBottom:'1px solid rgba(134,188,36,.1)' }}>
-                      <ShieldCheck className="h-5 w-5" style={{ color:'#86bc24' }} />
-                      <span className="text-sm font-black tracking-wide" style={{ color:'#e8edf0' }}>Compliance Overview</span>
-                      <span className="hp-dot ml-auto h-2 w-2 rounded-full"
-                            style={{ background:'#86bc24', boxShadow:'0 0 8px #86bc24' }} />
-                    </div>
+                  {/* Tab content area */}
+                  <div className="p-6 h-[380px] flex flex-col justify-between">
+                    
+                    {activeTab === 'workflow' ? (
+                      // Tab 1: Workflow auto-scroll slides
+                      <div
+                        className="flex-1 flex flex-col justify-between"
+                        onMouseEnter={() => setIsPaused(true)}
+                        onMouseLeave={() => setIsPaused(false)}
+                      >
+                        {/* Slide Content */}
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black tracking-widest text-[#2e7d1a] uppercase bg-emerald-50 px-2.5 py-0.5 rounded">
+                              {workflowSlides[activeSlide].stepText}
+                            </span>
+                            <span className="text-[10px] font-semibold text-slate-400">
+                              {isPaused ? 'Paused' : 'Auto-scrolling'}
+                            </span>
+                          </div>
 
-                    {[
-                      { label:'PDF Tools Available',    value:'90+', accent:true  },
-                      { label:'File Uploads to Server', value:'0',   accent:false },
-                      { label:'Languages Supported',    value:'9',   accent:false },
-                      { label:'GMP Stamp Presets',      value:'10',  accent:false },
-                    ].map(({ label, value, accent }) => (
-                      <div key={label} className="flex items-center justify-between py-2.5"
-                           style={{ borderBottom:'1px solid rgba(134,188,36,.07)' }}>
-                        <span className="text-xs" style={{ color:'#5a7a7e' }}>{label}</span>
-                        <span className="text-xl font-black"
-                              style={{ color: accent ? '#86bc24' : '#c8ddb0' }}>{value}</span>
+                          <div className="flex gap-4 items-start">
+                            {/* Slide Icon */}
+                            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-slate-50 border border-slate-100 shrink-0">
+                              {(() => {
+                                const SlideIcon = workflowSlides[activeSlide].icon;
+                                return <SlideIcon className="h-6 w-6 text-[#2e7d1a]" />;
+                              })()}
+                            </div>
+                            
+                            <div>
+                              <h3 className="text-base font-bold text-slate-800 mb-1.5 transition-all">
+                                {workflowSlides[activeSlide].title}
+                              </h3>
+                              <p className="text-xs text-slate-500 leading-relaxed transition-all">
+                                {workflowSlides[activeSlide].desc}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Progress controls and navigation dots */}
+                        <div className="space-y-4">
+                          {/* Slide Progress Bar */}
+                          <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#2e7d1a] transition-all duration-75"
+                              style={{ width: `${slideProgress}%` }}
+                            />
+                          </div>
+
+                          {/* Navigation Dots and Action Links */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex gap-1.5">
+                              {workflowSlides.map((_, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => handleSlideSelect(idx)}
+                                  className={`w-2.5 h-2.5 rounded-full transition-all cursor-pointer ${
+                                    activeSlide === idx ? 'bg-[#2e7d1a] w-5' : 'bg-slate-200 hover:bg-slate-400'
+                                  }`}
+                                  aria-label={`Go to slide ${idx + 1}`}
+                                />
+                              ))}
+                            </div>
+                            
+                            <Link href={`/${locale}/tools`} className="text-[11px] font-bold text-[#2e7d1a] hover:underline flex items-center gap-1">
+                              Browse All Tools <ArrowRight className="h-3 w-3" />
+                            </Link>
+                          </div>
+                        </div>
+
                       </div>
-                    ))}
+                    ) : (
+                      // Tab 2: Compliance overview statistics & badges (the original content)
+                      <div className="flex-1 flex flex-col justify-between">
+                        <div className="space-y-3">
+                          {[
+                            { label:'PDF Tools Available',    value:'90+', accent:true  },
+                            { label:'File Uploads to Server', value:'0',   accent:false },
+                            { label:'Languages Supported',    value:'9',   accent:false },
+                            { label:'GMP Stamp Presets',      value:'10',  accent:false },
+                          ].map(({ label, value, accent }) => (
+                            <div key={label} className="flex items-center justify-between py-2 border-b border-slate-100">
+                              <span className="text-xs text-slate-500">{label}</span>
+                              <span className="text-lg font-black"
+                                    style={{ color: accent ? '#2e7d1a' : '#111827' }}>{value}</span>
+                            </div>
+                          ))}
+                        </div>
 
-                    <div className="pt-2 flex flex-wrap gap-1.5">
-                      {['EU GMP Annex 1','GDPR Art. 25','HPRA','FDA 21 CFR','ICH Q10'].map(b => (
-                        <span key={b}
-                              className="px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide"
-                              style={{ background:'rgba(134,188,36,.1)', color:'#86bc24', border:'1px solid rgba(134,188,36,.2)' }}>
-                          {b}
-                        </span>
-                      ))}
-                    </div>
+                        <div className="space-y-4">
+                          <div className="flex flex-wrap gap-1.5">
+                            {['EU GMP Annex 1','GDPR Art. 25','HPRA','FDA 21 CFR','ICH Q10'].map(b => (
+                              <span key={b}
+                                    className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wide bg-slate-50 border border-slate-100 text-slate-600">
+                                {b}
+                              </span>
+                            ))}
+                          </div>
 
-                    <Link href={`/${locale}/tools/gmp-stamp`} className="block pt-1">
-                      <button className="hp-btn-solid w-full justify-center" style={{ width:'100%' }}>
-                        Open GMP Stamp Tool <ArrowRight className="h-4 w-4" />
-                      </button>
-                    </Link>
+                          <Link href={`/${locale}/tools/gmp-stamp`} className="block">
+                            <button className="hp-btn-green w-full justify-center">
+                              Open GMP Stamp Tool <ArrowRight className="h-4 w-4" />
+                            </button>
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 </div>
               </div>
@@ -342,16 +606,14 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
           </div>
         </section>
 
-        {/* ════════════════════════════════════════════════
-            HIGHLIGHTS TICKER
-        ════════════════════════════════════════════════ */}
+        {/* ════════════════ HIGHLIGHTS TICKER ════════════════ */}
         <div className="relative overflow-hidden select-none"
-             style={{ background:'#080c09', borderTop:'1px solid rgba(134,188,36,.14)', borderBottom:'1px solid rgba(134,188,36,.08)' }}
+             style={{ background:'#4a9e2a', borderTop:'1px solid rgba(0,0,0,.06)' }}
              aria-hidden="true">
           <div className="ltfade-l" />
           <div className="ltfade-r" />
           <div style={{ padding:'10px 0' }}>
-            <div className="lifepdf-ticker-track">
+            <div className="lp-ticker-track">
               {[0,1].map(i => (
                 <span key={i} style={{ display:'inline-flex', alignItems:'center' }}>
                   <span className="lti"><svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span className="hl">Files Never Leave Your Device</span></span><span className="lti-dot"/>
@@ -369,19 +631,17 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
           </div>
         </div>
 
-        {/* ════════════════════════════════════════════════
-            ANIMATED STATS
-        ════════════════════════════════════════════════ */}
-        <section style={{ background:'#0d1317', borderBottom:'1px solid rgba(134,188,36,.07)' }} aria-label="Statistics">
+        {/* ════════════════ STATS ════════════════ */}
+        <section style={{ background:'#ffffff', borderBottom:'1px solid #e5e7eb' }} aria-label="Statistics">
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-2 md:grid-cols-4">
               {[
                 { value: allTools.length, suffix:'+', label: t('home.stats.pdfTools') },
-                { value: 100,  suffix:'%', label: t('home.stats.freeToUse') },
-                { value: 9,    suffix:'',  label: t('home.stats.languages') },
-                { value: 0,    suffix:'',  label: t('home.stats.filesUploaded') },
+                { value: 100, suffix:'%', label: t('home.stats.freeToUse') },
+                { value: 9,   suffix:'',  label: t('home.stats.languages') },
+                { value: 0,   suffix:'',  label: t('home.stats.filesUploaded') },
               ].map(({ value, suffix, label }, i) => (
-                <div key={label} style={{ borderLeft: i > 0 ? '1px solid rgba(134,188,36,.08)' : 'none' }}>
+                <div key={label} style={{ borderLeft: i > 0 ? '1px solid #e5e7eb' : 'none' }}>
                   <StatItem value={value} suffix={suffix} label={label} />
                 </div>
               ))}
@@ -389,30 +649,93 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
           </div>
         </section>
 
-        {/* ════════════════════════════════════════════════
-            FEATURED GMP TOOL
-        ════════════════════════════════════════════════ */}
-        <section className="py-16" style={{ background:'#0a0f0d' }} aria-labelledby="featured-gmp-heading">
+        {/* ════════════════ WASM LOCAL SECURITY ARCHITECTURE ════════════════ */}
+        <section className="py-20 text-white" style={{ background: '#0f172a' }} aria-labelledby="wasm-sec-heading">
           <div className="container mx-auto px-4">
-            <div className="hp-glow-border hp-shimmer-wrap">
-              <div className="hp-glow-inner p-8 lg:p-10"
-                   style={{ background:'linear-gradient(135deg,#0e1910 0%,#0d1317 55%,#0e1910 100%)' }}>
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-4"
+                   style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#a7f3d0' }}>
+                🛡️ Local Execution Stack
+              </div>
+              <h2 id="wasm-sec-heading" className="text-3xl lg:text-4xl font-black mb-4 tracking-tight">
+                Local Security Architecture
+              </h2>
+              <p className="text-base max-w-2xl mx-auto text-slate-400">
+                GxP and regulatory compliance built directly into the client-side execution layer. Files never touch a server.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                {
+                  title: '100% Client-Side Sandbox',
+                  desc: 'All PDF documents are parsed and modified locally in your browser\'s secure tab sandbox. Data never travels across the network.',
+                  icon: Lock,
+                  tag: 'Zero Ingestion'
+                },
+                {
+                  title: 'Offline-First Security',
+                  desc: 'Disconnect your internet entirely. Once the web application loads, all 90+ tools execute in full isolation without calling back home.',
+                  icon: ShieldCheck,
+                  tag: 'Air-Gapped Ready'
+                },
+                {
+                  title: 'Zero Permanent Storage',
+                  desc: 'No databases, shadow tracking, or cloud log retention. Files reside transiently in browser RAM and vanish on tab close.',
+                  icon: FileCheck2,
+                  tag: 'GDPR Compliant'
+                },
+                {
+                  title: 'WebAssembly Engine',
+                  desc: 'High-performance PDF transformations compiled from native Rust and C++ libraries directly into fast WASM browser binaries.',
+                  icon: Zap,
+                  tag: 'Native Speeds'
+                }
+              ].map(({ title, desc, icon: Icon, tag }) => (
+                <div key={title} className="p-6 rounded-xl border flex flex-col justify-between"
+                     style={{ background: '#1e293b', borderColor: '#334155' }}>
+                  <div>
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-4"
+                         style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <Icon className="h-5 w-5 text-emerald-400" />
+                    </div>
+                    <h3 className="text-lg font-bold mb-2 text-white">{title}</h3>
+                    <p className="text-sm text-slate-400 leading-relaxed mb-6">{desc}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded"
+                          style={{ background: 'rgba(167,243,208,0.1)', color: '#a7f3d0' }}>
+                      {tag}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ════════════════ FEATURED GMP TOOL ════════════════ */}
+        <section className="py-16" style={{ background:'#ffffff' }} aria-labelledby="featured-gmp-heading">
+          <div className="container mx-auto px-4">
+            <div className="rounded-2xl overflow-hidden"
+                 style={{ border:'1px solid #e5e7eb' }}>
+              <div className="p-8 lg:p-10"
+                   style={{ background:'#f8fafc' }}>
                 <div className="flex flex-col lg:flex-row lg:items-center gap-10">
 
                   <div className="flex-1">
                     <div className="hp-section-label">
-                      <span className="hp-dot h-1.5 w-1.5 rounded-full" style={{ background:'#86bc24' }} />
                       Featured Pharma Tool
                     </div>
                     <h2 id="featured-gmp-heading"
                         className="text-2xl lg:text-[2rem] font-black mb-3 leading-tight"
-                        style={{ color:'#f0f4e8' }}>
+                        style={{ color:'#111827' }}>
                       Pharma GMP Document Stamp Tool
                     </h2>
-                    <p className="mb-5 max-w-xl leading-relaxed text-sm lg:text-base" style={{ color:'#7a9a9e' }}>
+                    <p className="mb-5 max-w-xl leading-relaxed text-sm lg:text-base" style={{ color:'#4b5563' }}>
                       Apply{' '}
-                      <span style={{ color:'#a8d45c', fontWeight:700 }}>APPROVED, DRAFT, SUPERSEDED, CONTROLLED COPY</span>
-                      {' '}and 7 other GMP-compliant status stamps to any pharmaceutical PDF.
+                      <span style={{ color:'#2e7d1a', fontWeight:700 }}>APPROVED, DRAFT, SUPERSEDED, CONTROLLED COPY</span>
+                      {' '}and 10 other GMP-compliant status stamps to any pharmaceutical PDF.
                       Drag, position, resize and save — entirely in your browser.
                     </p>
                     <div className="flex flex-wrap gap-5 mb-7">
@@ -421,33 +744,33 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
                         { icon: FlaskConical,label:'EU GMP Annex 1 compliant'     },
                         { icon: FileCheck2,  label:'GDPR Art. 25 · HPRA'          },
                       ].map(({ icon: Icon, label }) => (
-                        <div key={label} className="flex items-center gap-1.5 text-xs font-semibold" style={{ color:'#86bc24' }}>
+                        <div key={label} className="flex items-center gap-1.5 text-xs font-semibold" style={{ color:'#2e7d1a' }}>
                           <Icon className="h-3.5 w-3.5" /> {label}
                         </div>
                       ))}
                     </div>
                     <Link href={`/${locale}/tools/gmp-stamp`}>
-                      <button className="hp-btn-solid">
+                      <button className="hp-btn-green">
                         Open GMP Stamp Tool <ArrowRight className="h-4 w-4" />
                       </button>
                     </Link>
                   </div>
 
-                  <div className="lg:flex-shrink-0 lg:w-60 space-y-2">
+                  <div className="lg:flex-shrink-0 lg:w-56 space-y-2">
                     {[
-                      { text:'APPROVED',        c:'#86bc24', bg:'rgba(134,188,36,.08)', bd:'rgba(134,188,36,.3)'  },
-                      { text:'CONTROLLED COPY', c:'#86bc24', bg:'rgba(134,188,36,.08)', bd:'rgba(134,188,36,.3)'  },
-                      { text:'DRAFT',           c:'#f87171', bg:'rgba(248,113,113,.08)', bd:'rgba(248,113,113,.3)'},
-                      { text:'SUPERSEDED',      c:'#f87171', bg:'rgba(248,113,113,.08)', bd:'rgba(248,113,113,.3)'},
-                      { text:'CONFIDENTIAL',    c:'#f87171', bg:'rgba(248,113,113,.08)', bd:'rgba(248,113,113,.3)'},
+                      { text:'APPROVED',        c:'#2e7d1a', bg:'rgba(46,125,26,0.06)', bd:'rgba(46,125,26,0.18)'  },
+                      { text:'CONTROLLED COPY', c:'#2e7d1a', bg:'rgba(46,125,26,0.06)', bd:'rgba(46,125,26,0.18)'  },
+                      { text:'DRAFT',           c:'#b91c1c', bg:'rgba(185,28,28,0.05)', bd:'rgba(185,28,28,0.15)'   },
+                      { text:'SUPERSEDED',      c:'#b91c1c', bg:'rgba(185,28,28,0.05)', bd:'rgba(185,28,28,0.15)'   },
+                      { text:'CONFIDENTIAL',    c:'#b91c1c', bg:'rgba(185,28,28,0.05)', bd:'rgba(185,28,28,0.15)'   },
                     ].map(s => (
                       <div key={s.text}
-                           className="hp-stamp-row flex items-center justify-center rounded-lg py-2 text-xs font-black tracking-widest uppercase"
-                           style={{ color:s.c, background:s.bg, border:`1.5px solid ${s.bd}` }}>
+                           className="flex items-center justify-center rounded py-2 text-xs font-black tracking-widest uppercase"
+                           style={{ color:s.c, background:s.bg, border:`1px solid ${s.bd}` }}>
                         {s.text}
                       </div>
                     ))}
-                    <p className="pt-1 text-center text-[11px] font-semibold" style={{ color:'#4a6a6e' }}>
+                    <p className="pt-1 text-center text-[11px] font-semibold" style={{ color:'#6b7280' }}>
                       10 GMP presets · Draggable · Resizable
                     </p>
                   </div>
@@ -458,65 +781,57 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
           </div>
         </section>
 
-        {/* ════════════════════════════════════════════════
-            WHY CHOOSE — 3 FEATURES
-        ════════════════════════════════════════════════ */}
-        <section className="py-16" style={{ background:'#0d1317' }} aria-label="Features">
+        {/* ════════════════ WHY CHOOSE ════════════════ */}
+        <section className="py-16" style={{ background:'#ffffff', borderTop:'1px solid #e5e7eb', borderBottom:'1px solid #e5e7eb' }} aria-label="Features">
           <div className="container mx-auto px-4">
             <div className="text-center mb-12">
-              <div className="hp-section-label mx-auto" style={{ display:'inline-flex' }}>
+              <div className="hp-section-label" style={{ display:'inline-flex' }}>
                 <Sparkles className="h-3.5 w-3.5" />
                 Why Priya LifePDF
               </div>
-              <h2 className="text-2xl lg:text-3xl font-black mb-3" style={{ color:'#f0f4e8' }}>
+              <h2 className="text-2xl lg:text-3xl font-black mb-3" style={{ color:'#111827' }}>
                 Built for Pharma &amp; Life Science Professionals
               </h2>
-              <p className="text-sm max-w-xl mx-auto" style={{ color:'#5a7a7e' }}>
+              <p className="text-sm max-w-xl mx-auto" style={{ color:'#4b5563' }}>
                 Every feature designed around GMP compliance, data privacy, and regulatory requirements.
               </p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
-                { icon: ShieldCheck, color:'#86bc24', bg:'rgba(134,188,36,.1)', bd:'rgba(134,188,36,.2)',
-                  title: t('home.features.privacy.title'),
-                  desc:  t('home.features.privacy.description') },
-                { icon: Zap,        color:'#f0c040', bg:'rgba(240,192,64,.1)',  bd:'rgba(240,192,64,.2)',
-                  title: t('home.features.free.title'),
-                  desc:  t('home.features.free.description') },
-                { icon: Wrench,     color:'#60a8f0', bg:'rgba(96,168,240,.1)',  bd:'rgba(96,168,240,.2)',
-                  title: t('home.features.powerful.title'),
-                  desc:  t('home.features.powerful.description') },
+                { icon: ShieldCheck, color:'#2e7d1a', bg:'rgba(46,125,26,0.06)', bd:'rgba(46,125,26,0.15)',
+                  title: t('home.features.privacy.title'), desc: t('home.features.privacy.description') },
+                { icon: Zap,  color:'#d97706', bg:'rgba(217,119,6,0.06)', bd:'rgba(217,119,6,0.15)',
+                  title: t('home.features.free.title'), desc: t('home.features.free.description') },
+                { icon: Wrench, color:'#2563eb', bg:'rgba(37,99,235,0.06)', bd:'rgba(37,99,235,0.15)',
+                  title: t('home.features.powerful.title'), desc: t('home.features.powerful.description') },
               ].map(({ icon: Icon, color, bg, bd, title, desc }, idx) => (
                 <div key={title}
-                     className="hp-card rounded-2xl p-7 flex flex-col items-center text-center"
-                     style={{ background:'#0e1910', border:'1px solid rgba(134,188,36,.1)', animationDelay:`${idx*.1}s` }}>
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5"
+                     className="hp-card rounded-2xl p-7 flex flex-col items-center text-center bg-white"
+                     style={{ border:`1px solid #e5e7eb` }}>
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5"
                        style={{ background:bg, border:`1px solid ${bd}` }}>
-                    <Icon className="h-7 w-7" style={{ color }} />
+                    <Icon className="h-6 w-6" style={{ color }} />
                   </div>
-                  <h3 className="text-base font-bold mb-2" style={{ color:'#e8edf0' }}>{title}</h3>
-                  <p className="text-sm leading-relaxed" style={{ color:'#5a7a7e' }}>{desc}</p>
+                  <h3 className="text-base font-bold mb-2" style={{ color:'#111827' }}>{title}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color:'#4b5563' }}>{desc}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ════════════════════════════════════════════════
-            POPULAR TOOLS
-        ════════════════════════════════════════════════ */}
-        <section className="py-16" style={{ background:'#0a0f0d' }} aria-labelledby="popular-tools-heading">
+        {/* ════════════════ POPULAR TOOLS ════════════════ */}
+        <section className="py-16" style={{ background:'#ffffff' }} aria-labelledby="popular-tools-heading">
           <div className="container mx-auto px-4">
             <div className="text-center mb-10">
-              <div className="hp-section-label mx-auto" style={{ display:'inline-flex' }}>
+              <div className="hp-section-label" style={{ display:'inline-flex' }}>
                 <Star className="h-3.5 w-3.5" />
                 {t('home.popularTools.badge')}
               </div>
-              <h2 id="popular-tools-heading" className="text-2xl lg:text-3xl font-black mb-3" style={{ color:'#f0f4e8' }}>
+              <h2 id="popular-tools-heading" className="text-2xl lg:text-3xl font-black mb-3" style={{ color:'#111827' }}>
                 {t('home.popularTools.title')}
               </h2>
-              <p className="text-sm max-w-2xl mx-auto" style={{ color:'#5a7a7e' }}>
+              <p className="text-sm max-w-2xl mx-auto" style={{ color:'#4b5563' }}>
                 {t('home.popularTools.description')}
               </p>
             </div>
@@ -524,23 +839,21 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
           </div>
         </section>
 
-        {/* ════════════════════════════════════════════════
-            ORGANIZE & MANAGE TOOLS
-        ════════════════════════════════════════════════ */}
-        <section className="py-16" style={{ background:'#0d1317' }} aria-labelledby="featured-tools-heading">
+        {/* ════════════════ ORGANIZE TOOLS ════════════════ */}
+        <section className="py-16" style={{ background:'#f8fafc', borderTop:'1px solid #e5e7eb', borderBottom:'1px solid #e5e7eb' }} aria-labelledby="featured-tools-heading">
           <div className="container mx-auto px-4">
             <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
               <div>
-                <h2 id="featured-tools-heading" className="text-2xl font-black mb-1.5" style={{ color:'#f0f4e8' }}>
+                <h2 id="featured-tools-heading" className="text-2xl font-black mb-1.5" style={{ color:'#111827' }}>
                   {t(`home.categories.${categoryTranslationKeys['organize-manage']}`)}
                 </h2>
-                <p className="text-sm" style={{ color:'#5a7a7e' }}>
+                <p className="text-sm" style={{ color:'#4b5563' }}>
                   {t(`home.categoriesDescription.${categoryTranslationKeys['organize-manage']}`)}
                 </p>
               </div>
               <Link href={`/${locale}/tools`}>
                 <button className="hp-btn-outline" style={{ padding:'8px 18px', fontSize:'13px' }}>
-                  {t('common.navigation.tools')} <ArrowRight className="h-4 w-4" />
+                  {t('common.navigation.tools')} <ArrowRight className="h-4 w-4" style={{ color:'#2e7d1a' }} />
                 </button>
               </Link>
             </div>
@@ -552,38 +865,36 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
           </div>
         </section>
 
-        {/* ════════════════════════════════════════════════
-            TOOL CATEGORIES
-        ════════════════════════════════════════════════ */}
-        <section className="py-16" style={{ background:'#0a0f0d' }} aria-labelledby="categories-heading">
+        {/* ════════════════ CATEGORIES ════════════════ */}
+        <section className="py-16" style={{ background:'#ffffff' }} aria-labelledby="categories-heading">
           <div className="container mx-auto px-4">
             <div className="text-center mb-10">
-              <h2 id="categories-heading" className="text-2xl lg:text-3xl font-black mb-3" style={{ color:'#f0f4e8' }}>
+              <h2 id="categories-heading" className="text-2xl lg:text-3xl font-black mb-3" style={{ color:'#111827' }}>
                 {t('home.categoriesSection.title')}
               </h2>
-              <p className="text-sm max-w-2xl mx-auto" style={{ color:'#5a7a7e' }}>
+              <p className="text-sm max-w-2xl mx-auto" style={{ color:'#4b5563' }}>
                 {t('home.categoriesSection.description', { count: allTools.length })}
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {categoryOrder.map((category, idx) => {
+              {categoryOrder.map((category) => {
                 const tools = getToolsByCategory(category);
                 const Icon = categoryIcons[category];
                 const name = t(`home.categories.${categoryTranslationKeys[category]}`);
                 const desc = t(`home.categoriesDescription.${categoryTranslationKeys[category]}`);
                 return (
                   <Link key={category} href={`/${locale}/tools?category=${category}`} className="group block">
-                    <div className="hp-card rounded-2xl p-5 h-full flex items-start gap-4"
-                         style={{ background:'#0e1910', border:'1px solid rgba(134,188,36,.1)' }}>
+                    <div className="hp-card rounded-2xl p-5 h-full flex items-start gap-4 bg-white"
+                         style={{ border:'1px solid #e5e7eb' }}>
                       <div className="hp-cat-icon flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center"
-                           style={{ background:'rgba(134,188,36,.1)', border:'1px solid rgba(134,188,36,.18)' }}>
-                        <Icon className="h-5 w-5" style={{ color:'#86bc24' }} />
+                           style={{ background:'rgba(46,125,26,0.06)', border:'1px solid rgba(46,125,26,0.15)' }}>
+                        <Icon className="h-5 w-5" style={{ color:'#2e7d1a' }} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="hp-cat-title font-bold text-sm mb-1" style={{ color:'#e8edf0' }}>{name}</h3>
-                        <p className="text-xs line-clamp-2 mb-2.5" style={{ color:'#4a6a6e' }}>{desc}</p>
+                        <h3 className="hp-cat-title font-bold text-sm mb-1" style={{ color:'#111827' }}>{name}</h3>
+                        <p className="text-xs line-clamp-2 mb-2.5" style={{ color:'#6b7280' }}>{desc}</p>
                         <span className="text-[11px] font-bold px-2 py-0.5 rounded-md"
-                              style={{ background:'rgba(134,188,36,.08)', color:'#86bc24' }}>
+                              style={{ background:'rgba(46,125,26,0.06)', color:'#2e7d1a' }}>
                           {t('home.categoriesSection.toolsCount', { count: tools.length })}
                         </span>
                       </div>
@@ -595,38 +906,45 @@ export default function HomePageClient({ locale, localizedToolContent }: HomePag
           </div>
         </section>
 
-        {/* ════════════════════════════════════════════════
-            BOTTOM CTA BANNER
-        ════════════════════════════════════════════════ */}
-        <section className="py-20 relative overflow-hidden"
-                 style={{ background:'linear-gradient(135deg,#0e1910 0%,#0d1317 50%,#0e1910 100%)' }}>
-          <div className="absolute inset-0 pointer-events-none" style={{
-            backgroundImage:'radial-gradient(circle,rgba(134,188,36,.05) 1px,transparent 1px)',
-            backgroundSize:'26px 26px',
-          }} />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[220px] rounded-full pointer-events-none"
-               style={{ background:'radial-gradient(ellipse,rgba(134,188,36,.09) 0%,transparent 70%)' }} />
-
+        {/* ════════════════ CTA BANNER ════════════════ */}
+        <section className="py-24 relative overflow-hidden"
+                 style={{ background:'#2e7d1a' }}>
           <div className="container mx-auto px-4 relative z-10 text-center">
-            <div className="hp-section-label mx-auto mb-6" style={{ display:'inline-flex' }}>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold mb-6"
+                 style={{ background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', color:'#fff' }}>
               <Sparkles className="h-3.5 w-3.5" />
               100% Free · No Registration · No File Upload
             </div>
-            <h2 className="text-3xl lg:text-[2.6rem] font-black mb-4 leading-tight" style={{ color:'#f0f4e8' }}>
+            <h2 className="text-3xl lg:text-[2.6rem] font-black mb-4 leading-tight text-white">
               Start Processing PDFs Privately Today
             </h2>
-            <p className="text-base max-w-lg mx-auto mb-8" style={{ color:'#5a7a7e' }}>
+            <p className="text-base max-w-lg mx-auto mb-8 text-emerald-100">
               Trusted by pharma and life science teams across Ireland and the EU
               for secure, browser-based PDF processing.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link href={`/${locale}/tools`}>
-                <button className="hp-btn-solid" style={{ fontSize:'16px', padding:'14px 34px' }}>
+                <button style={{
+                  display:'inline-flex',alignItems:'center',gap:'8px',
+                  borderRadius:'6px',padding:'12px 32px',fontSize:'14px',fontWeight:600,cursor:'pointer',
+                  background:'#ffffff',color:'#2e7d1a',border:'none',
+                  transition:'background .15s ease,transform .12s ease',
+                }}
+                onMouseEnter={e=>{(e.target as HTMLElement).style.background='#f3f4f6'}}
+                onMouseLeave={e=>{(e.target as HTMLElement).style.background='#ffffff'}}>
                   Explore All {allTools.length}+ Tools <ArrowRight className="h-5 w-5" />
                 </button>
               </Link>
               <Link href={`/${locale}/tools/gmp-stamp`}>
-                <button className="hp-btn-outline" style={{ fontSize:'14px', padding:'14px 24px' }}>
+                <button style={{
+                  display:'inline-flex',alignItems:'center',gap:'8px',
+                  borderRadius:'6px',padding:'12px 24px',fontSize:'14px',fontWeight:600,cursor:'pointer',
+                  background:'rgba(255,255,255,0.1)',color:'#ffffff',
+                  border:'1px solid rgba(255,255,255,0.25)',
+                  transition:'background .15s ease,transform .12s ease',
+                }}
+                onMouseEnter={e=>{(e.target as HTMLElement).style.background='rgba(255,255,255,0.18)'}}
+                onMouseLeave={e=>{(e.target as HTMLElement).style.background='rgba(255,255,255,0.1)'}}>
                   <FlaskConical className="h-4 w-4" />
                   Try GMP Stamp Tool
                 </button>
